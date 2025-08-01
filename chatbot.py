@@ -5,7 +5,6 @@ from langchain.document_loaders import TextLoader
 from langchain.chains import RetrievalQA,  ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.chat_models import ChatOpenAI
-from langchain.document_loaders import TextLoader
 from langchain.document_loaders import PyPDFLoader
 
 def load_db(file, chain_type, k):
