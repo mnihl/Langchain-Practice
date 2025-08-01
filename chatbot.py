@@ -6,10 +6,11 @@ from langchain.chains import RetrievalQA,  ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
+from langchain.document_loaders import WebBaseLoader
 
 def load_db(file, chain_type, k):
     # load documents
-    loader = PyPDFLoader(file)
+    loader = WebBaseLoader("https://github.com/mnihl/Langchain-Practice/blob/main/input.md")
     documents = loader.load()
     # split documents
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
