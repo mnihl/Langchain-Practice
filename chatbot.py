@@ -1,8 +1,10 @@
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import DocArrayInMemorySearch
-from langchain.chains import ConversationalRetrievalChain
+from langchain.chains import RetrievalQA,  ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
 from langchain_openai import ChatOpenAI
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import WebBaseLoader
 import sys
 import panel as pn  # GUI
@@ -45,6 +47,7 @@ def load_db(chain_type, k):
     # define retriever
     retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": k})
     # create a chatbot chain. Memory is managed externally.
+
     qa = ConversationalRetrievalChain.from_llm(
         llm=ChatOpenAI(model_name=llm_name, temperature=0), 
         chain_type=chain_type, 
