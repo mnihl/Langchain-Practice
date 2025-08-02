@@ -7,8 +7,31 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
 from langchain.document_loaders import WebBaseLoader
+import os
+import openai
+import sys
+import panel as pn  # GUI
+import param
+from langchain.vectorstores import Chroma
 
-def load_db(file, chain_type, k):
+sys.path.append('../..')
+
+pn.extension()
+
+from dotenv import load_dotenv, find_dotenv
+_ = load_dotenv(find_dotenv()) # read local .env file
+
+openai.api_key  = os.environ['OPENAI_API_KEY']
+
+import datetime
+current_date = datetime.datetime.now().date()
+if current_date < datetime.date(2023, 9, 2):
+    llm_name = "gpt-3.5-turbo-0301"
+else:
+    llm_name = "gpt-3.5-turbo"
+print(llm_name)
+
+def load_db(chain_type, k):
     # load documents
     loader = WebBaseLoader("https://github.com/mnihl/Langchain-Practice/blob/main/input.md")
     documents = loader.load()
@@ -31,9 +54,6 @@ def load_db(file, chain_type, k):
     )
     return qa 
 
-import panel as pn
-import param
-
 class cbfs(param.Parameterized):
     chat_history = param.List([])
     answer = param.String("")
@@ -43,20 +63,8 @@ class cbfs(param.Parameterized):
     def __init__(self,  **params):
         super(cbfs, self).__init__( **params)
         self.panels = []
-        self.loaded_file = "docs/cs229_lectures/MachineLearning-Lecture01.pdf"
-        self.qa = load_db(self.loaded_file,"stuff", 4)
-    
-    def call_load_db(self, count):
-        if count == 0 or file_input.value is None:  # init or no file specified :
-            return pn.pane.Markdown(f"Loaded File: {self.loaded_file}")
-        else:
-            file_input.save("temp.pdf")  # local copy
-            self.loaded_file = file_input.filename
-            button_load.button_style="outline"
-            self.qa = load_db("temp.pdf", "stuff", 4)
-            button_load.button_style="solid"
-        self.clr_history()
-        return pn.pane.Markdown(f"Loaded File: {self.loaded_file}")
+        self.loaded_file = "https://github.com/mnihl/Langchain-Practice/blob/main/input.md"
+        self.qa = load_db("stuff", 4)
 
     def convchain(self, query):
         if not query:
