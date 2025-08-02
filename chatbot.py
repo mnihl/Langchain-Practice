@@ -1,18 +1,12 @@
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.text_splitter import CharacterTextSplitter, RecursiveCharacterTextSplitter
-from langchain.vectorstores import DocArrayInMemorySearch
-from langchain.document_loaders import TextLoader
-from langchain.chains import RetrievalQA,  ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain.chat_models import ChatOpenAI
-from langchain.document_loaders import PyPDFLoader
-from langchain.document_loaders import WebBaseLoader
-import os
-import openai
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import DocArrayInMemorySearch
+from langchain.chains import ConversationalRetrievalChain
+from langchain_openai import ChatOpenAI
+from langchain_community.document_loaders import WebBaseLoader
 import sys
 import panel as pn  # GUI
 import param
-from langchain.vectorstores import Chroma
 
 sys.path.append('../..')
 
@@ -20,8 +14,6 @@ pn.extension()
 
 from dotenv import load_dotenv, find_dotenv
 _ = load_dotenv(find_dotenv()) # read local .env file
-
-openai.api_key  = os.environ['OPENAI_API_KEY']
 
 import datetime
 current_date = datetime.datetime.now().date()
@@ -33,13 +25,21 @@ print(llm_name)
 
 def load_db(chain_type, k):
     # load documents
-    loader = WebBaseLoader("https://github.com/mnihl/Langchain-Practice/blob/main/input.md")
+    # Use the raw URL to get just the markdown content, not the whole GitHub page
+    loader = WebBaseLoader("https://raw.githubusercontent.com/mnihl/Langchain-Practice/main/input.md")
     documents = loader.load()
     # split documents
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     docs = text_splitter.split_documents(documents)
-    # define embedding
-    embeddings = OpenAIEmbeddings()
+    # define embedding. Using a free, local model to avoid OpenAI API costs.
+    model_name = "sentence-transformers/all-MiniLM-L6-v2"
+    model_kwargs = {'device': 'cpu'}
+    encode_kwargs = {'normalize_embeddings': False}
+    embeddings = HuggingFaceEmbeddings(
+        model_name=model_name,
+        model_kwargs=model_kwargs,
+        encode_kwargs=encode_kwargs
+    )
     # create vector database from data
     db = DocArrayInMemorySearch.from_documents(docs, embeddings)
     # define retriever
@@ -63,8 +63,9 @@ class cbfs(param.Parameterized):
     def __init__(self,  **params):
         super(cbfs, self).__init__( **params)
         self.panels = []
-        self.loaded_file = "https://github.com/mnihl/Langchain-Practice/blob/main/input.md"
         self.qa = load_db("stuff", 4)
+        # The input widget is now an attribute of the class
+        self.inp = pn.widgets.TextInput(placeholder='Enter text here…')
 
     def convchain(self, query):
         if not query:
@@ -78,7 +79,8 @@ class cbfs(param.Parameterized):
             pn.Row('User:', pn.pane.Markdown(query, width=600)),
             pn.Row('ChatBot:', pn.pane.Markdown(self.answer, width=600, style={'background-color': '#F6F6F6'}))
         ])
-        inp.value = ''  #clears loading indicator when cleared
+        # Access the input widget via self.inp
+        self.inp.value = ''  #clears loading indicator when cleared
         return pn.WidgetBox(*self.panels,scroll=True)
 
     @param.depends('db_query ', )
@@ -115,42 +117,43 @@ class cbfs(param.Parameterized):
         self.chat_history = []
         return 
 
-cb = cbfs()
+def create_app():
+    """Creates the chatbot app. This function is deferred until the server is ready."""
+    cb = cbfs()
 
-file_input = pn.widgets.FileInput(accept='.pdf')
-button_load = pn.widgets.Button(name="Load DB", button_type='primary')
-button_clearhistory = pn.widgets.Button(name="Clear History", button_type='warning')
-button_clearhistory.on_click(cb.clr_history)
-inp = pn.widgets.TextInput( placeholder='Enter text here…')
+    button_clearhistory = pn.widgets.Button(name="Clear History", button_type='warning')
+    button_clearhistory.on_click(cb.clr_history)
 
-bound_button_load = pn.bind(cb.call_load_db, button_load.param.clicks)
-conversation = pn.bind(cb.convchain, inp) 
+    conversation = pn.bind(cb.convchain, cb.inp) 
 
-jpg_pane = pn.pane.Image( './img/convchain.jpg')
+    # jpg_pane = pn.pane.Image( './img/convchain.jpg')
 
-tab1 = pn.Column(
-    pn.Row(inp),
-    pn.layout.Divider(),
-    pn.panel(conversation,  loading_indicator=True, height=300),
-    pn.layout.Divider(),
-)
-tab2= pn.Column(
-    pn.panel(cb.get_lquest),
-    pn.layout.Divider(),
-    pn.panel(cb.get_sources ),
-)
-tab3= pn.Column(
-    pn.panel(cb.get_chats),
-    pn.layout.Divider(),
-)
-tab4=pn.Column(
-    pn.Row( file_input, button_load, bound_button_load),
-    pn.Row( button_clearhistory, pn.pane.Markdown("Clears chat history. Can use to start a new topic" )),
-    pn.layout.Divider(),
-    pn.Row(jpg_pane.clone(width=400))
-)
-dashboard = pn.Column(
-    pn.Row(pn.pane.Markdown('# ChatWithYourData_Bot')),
-    pn.Tabs(('Conversation', tab1), ('Database', tab2), ('Chat History', tab3),('Configure', tab4))
-)
-dashboard
+    tab1 = pn.Column(
+        pn.Row(cb.inp),
+        pn.layout.Divider(),
+        pn.panel(conversation,  loading_indicator=True, height=300),
+        pn.layout.Divider(),
+    )
+    tab2= pn.Column(
+        pn.panel(cb.get_lquest),
+        pn.layout.Divider(),
+        pn.panel(cb.get_sources ),
+    )
+    tab3= pn.Column(
+        pn.panel(cb.get_chats),
+        pn.layout.Divider(),
+    )
+    tab4=pn.Column(    
+        pn.Row( button_clearhistory, pn.pane.Markdown("Clears chat history. Can use to start a new topic" )),
+        pn.layout.Divider(),
+        # pn.Row(jpg_pane.clone(width=400))
+    )
+    dashboard = pn.Column(
+        pn.Row(pn.pane.Markdown('# ChatWithYourData_Bot')),
+        pn.Tabs(('Conversation', tab1), ('Database', tab2), ('Chat History', tab3),('Configure', tab4))
+    )
+    return dashboard
+
+# Wrap the app creation in pn.panel to show a loading indicator
+# while the database and models are being loaded.
+pn.panel(create_app, loading_indicator=True).servable()
